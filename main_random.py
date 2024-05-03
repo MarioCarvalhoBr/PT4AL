@@ -12,10 +12,15 @@ import torchvision.transforms as transforms
 import os
 import argparse
 import random
+import numpy as np
+from math import ceil
 
 from models import *
 from utils import progress_bar
 from loader import Loader, Loader2
+
+import yaml
+config = yaml.load(open('config.yaml'), Loader=yaml.FullLoader)
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
@@ -41,18 +46,9 @@ transform_test = transforms.Compose([
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
-indices = list(range(50000))
-random.shuffle(indices)
-labeled_set = indices[:1000]
-
-trainset = Loader(is_train=True, transform=transform_train)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, num_workers=2, sampler=SubsetRandomSampler(labeled_set))
-
 testset = Loader(is_train=False, transform=transform_test)
 testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
 
-classes = ('plane', 'car', 'bird', 'cat', 'deer',
-           'dog', 'frog', 'horse', 'ship', 'truck')
 
 # Model
 print('==> Building model..')
@@ -77,7 +73,7 @@ optimizer = optim.SGD(net.parameters(), lr=0.1,momentum=0.9, weight_decay=5e-4)
 scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[160])
 
 # Training
-def train(epoch):
+def train(net, criterion, optimizer, epoch, trainloader):
     print('\nEpoch: %d' % epoch)
     net.train()
     train_loss = 0
@@ -100,7 +96,7 @@ def train(epoch):
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
 
-def test(epoch):
+def test(net, criterion, epoch, cycle):
     global best_acc
     net.eval()
     test_loss = 0
@@ -131,11 +127,57 @@ def test(epoch):
         }
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/ckpt.pth')
+        torch.save(state, f'./checkpoint/main_{cycle}.pth')
         best_acc = acc
 
 
-for epoch in range(start_epoch, start_epoch+200):
-    train(epoch)
-    test(epoch)
-    scheduler.step()
+if __name__ == "__main__":
+    dataset_size = config['dataset_size']
+    unlabeled_batch_size = config['unlabeled_batch_size']
+    batch_percentage_on_increase = config['batch_percentage_on_increase']
+    number_of_batches = ceil(dataset_size / unlabeled_batch_size)
+    sample_size_increase = int(unlabeled_batch_size * batch_percentage_on_increase)
+
+    labeled_images = []
+        
+    # open unlabeled batch (sorted low->high)
+    with open(f'./rotation_loss.txt', 'r') as f:
+        unlabeled_batch_images = f.readlines()
+    
+    img_paths = []
+
+    for j in unlabeled_batch_images:
+        loss_str_split = j[:-1].split('@')
+        img_paths.append(loss_str_split[1]+'\n')
+
+    random.shuffle(img_paths)
+    unlabeled_batch_images = np.array(img_paths)
+
+
+    CYCLES = number_of_batches
+    for cycle in range(CYCLES):
+        criterion = nn.CrossEntropyLoss()
+        optimizer = optim.SGD(net.parameters(), lr=0.1,momentum=0.9, weight_decay=5e-4)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[160])
+
+        best_acc = 0
+        print('Cycle ', cycle)
+
+        # sample withouth replacement from unlabeled batch_images
+        unlabeled_images_sample = unlabeled_batch_images[:sample_size_increase]
+        unlabeled_batch_images = unlabeled_batch_images[sample_size_increase:]
+                
+        # add the sampled images to the labeled set
+        labeled_images.extend(unlabeled_images_sample)
+        print(f'>> Labeled length: {len(labeled_images)}')
+
+        trainset = Loader2(is_train=True, transform=transform_train, path_list=labeled_images)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True, num_workers=2)
+    
+        for epoch in range(start_epoch, start_epoch+20):
+            train(net, criterion, optimizer, epoch, trainloader)
+            test(net, criterion, epoch, cycle)
+            scheduler.step()
+
+        with open(f'./main_random_best.txt', 'a') as f:
+                f.write(str(cycle) + ' ' + str(best_acc)+'\n')

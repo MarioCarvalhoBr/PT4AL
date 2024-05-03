@@ -1,0 +1,18 @@
+# TODO: It may be better use a class to store this information
+classes:
+  - mamona
+  - background
+
+number_of_classes: 2
+
+img_size: 32
+
+mamonas_size: 1000
+backgroung_size: 1000
+dataset_size: 1600
+
+train_size: 0.8
+test_size: 0.2
+
+unlabeled_batch_size: 100
+batch_percentage_on_increase: 0.5
