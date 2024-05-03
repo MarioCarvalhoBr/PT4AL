@@ -12,6 +12,10 @@ import os
 import argparse
 import random
 import numpy as np
+from math import ceil
+
+import yaml
+config = yaml.load(open('config.yaml'), Loader=yaml.FullLoader)
 
 from models import *
 from loader import Loader, Loader2
@@ -44,8 +48,6 @@ transform_test = transforms.Compose([
 testset = Loader(is_train=False, transform=transform_test)
 testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
 
-classes = ('plane', 'car', 'bird', 'cat', 'deer',
-           'dog', 'frog', 'horse', 'ship', 'truck')
 
 # Model
 print('==> Building model..')
@@ -151,12 +153,12 @@ def get_plabels(net, samples, cycle):
 
 # confidence sampling (pseudo labeling)
 ## return 1k samples w/ lowest top1 score
-def get_plabels2(net, samples, cycle):
+def get_plabels2(net, samples, cycle, sample_size_increase):
     # dictionary with 10 keys as class labels
-    class_dict = {}
-    [class_dict.setdefault(x,[]) for x in range(10)]
+    # class_dict = {}
+    # [class_dict.setdefault(x,[]) for x in range(10)]
 
-    sample1k = []
+    # sample1k = []
     sub5k = Loader2(is_train=False,  transform=transform_test, path_list=samples)
     ploader = torch.utils.data.DataLoader(sub5k, batch_size=1, shuffle=False, num_workers=2)
 
@@ -172,9 +174,10 @@ def get_plabels2(net, samples, cycle):
             probs = F.softmax(outputs, dim=1)
             top1_scores.append(probs[0][predicted.item()])
             progress_bar(idx, len(ploader))
+    top1_scores = [score.cpu().numpy() for score in top1_scores]
     idx = np.argsort(top1_scores)
     samples = np.array(samples)
-    return samples[idx[:1000]]
+    return samples[idx[:sample_size_increase]]
 
 # entropy sampling
 def get_plabels3(net, samples, cycle):
@@ -196,16 +199,23 @@ def get_plabels3(net, samples, cycle):
     return samples[idx[-1000:]]
 
 def get_classdist(samples):
-    class_dist = np.zeros(10)
+    # TODO: hardcode class number
+    class_dist = np.zeros(2)
     for sample in samples:
         label = int(sample.split('/')[-2])
         class_dist[label] += 1
     return class_dist
 
 if __name__ == '__main__':
-    labeled = []
+    dataset_size = config['dataset_size']
+    unlabeled_batch_size = config['unlabeled_batch_size']
+    batch_percentage_on_increase = config['batch_percentage_on_increase']
+    number_of_batches = ceil(dataset_size / unlabeled_batch_size)
+    sample_size_increase = int(unlabeled_batch_size * batch_percentage_on_increase)
+
+    labeled_images = []
         
-    CYCLES = 10
+    CYCLES = number_of_batches
     for cycle in range(CYCLES):
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.SGD(net.parameters(), lr=0.1,momentum=0.9, weight_decay=5e-4)
@@ -214,9 +224,9 @@ if __name__ == '__main__':
         best_acc = 0
         print('Cycle ', cycle)
 
-        # open 5k batch (sorted low->high)
+        # open unlabeled batch (sorted low->high)
         with open(f'./loss/batch_{cycle}.txt', 'r') as f:
-            samples = f.readlines()
+            unlabeled_batch_images = f.readlines()
             
         if cycle > 0:
             print('>> Getting previous checkpoint')
@@ -226,18 +236,19 @@ if __name__ == '__main__':
             net.load_state_dict(checkpoint['net'])
 
             # sampling
-            sample1k = get_plabels2(net, samples, cycle)
+            unlabeled_images_sample = get_plabels2(net, unlabeled_batch_images, cycle, sample_size_increase)
         else:
-            # first iteration: sample 1k at even intervals
-            samples = np.array(samples)
-            sample1k = samples[[j*5 for j in range(1000)]]
-        # add 1k samples to labeled set
-        labeled.extend(sample1k)
-        print(f'>> Labeled length: {len(labeled)}')
-        trainset = Loader2(is_train=True, transform=transform_train, path_list=labeled)
+            # first iteration: sample portion of the batch
+            unlabeled_batch_images = np.array(unlabeled_batch_images)
+            unlabeled_images_sample = unlabeled_batch_images[[j for j in range(0, unlabeled_batch_size, int(1/batch_percentage_on_increase))]]
+        
+        # add the sampled images to the labeled set
+        labeled_images.extend(unlabeled_images_sample)
+        print(f'>> Labeled length: {len(labeled_images)}')
+        trainset = Loader2(is_train=True, transform=transform_train, path_list=labeled_images)
         trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True, num_workers=2)
 
-        for epoch in range(200):
+        for epoch in range(20):
             train(net, criterion, optimizer, epoch, trainloader)
             test(net, criterion, epoch, cycle)
             scheduler.step()

@@ -9,6 +9,9 @@ import numpy as np
 import random
 import cv2
 
+import yaml
+config = yaml.load(open('config.yaml', 'r'), Loader=yaml.FullLoader)
+
 class RotationLoader(Dataset):
     def __init__(self, is_train=True, transform=None, path='./DATA'):
         self.is_train = is_train
@@ -77,12 +80,15 @@ class Loader2(Dataset):
     
 class Loader_Cold(Dataset):
     def __init__(self, is_train=True, transform=None, path='./DATA'):
-        self.classes = 10
+        unlabeled_batch_size = config['unlabeled_batch_size']
+        batch_percentage_on_increase = config['batch_percentage_on_increase']
+
         self.is_train = is_train
         self.transform = transform
-        with open('/workspace/A/PT4AL/loss/batch_5.txt', 'r') as f:
+        # TODO: hardcoded path
+        with open('./loss/batch_5.txt', 'r') as f:
             self.list = f.readlines()
-        self.list = [self.list[i*5] for i in range(1000)]
+        self.list = [self.list[i] for i in range(0, unlabeled_batch_size, int(1/batch_percentage_on_increase))]
         if self.is_train==True: # train
             self.img_path = self.list
         else:
@@ -104,7 +110,6 @@ class Loader_Cold(Dataset):
     
 class Loader(Dataset):
     def __init__(self, is_train=True, transform=None, path='./DATA'):
-        self.classes = 10 
         self.is_train = is_train
         self.transform = transform
         if self.is_train: # train

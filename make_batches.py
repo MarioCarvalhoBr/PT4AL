@@ -12,10 +12,14 @@ import os
 import argparse
 import random
 import numpy as np
+from math import ceil
 
 from models import *
 from loader import Loader, RotationLoader
 from utils import progress_bar
+
+import yaml
+config = yaml.load(open('config.yaml', 'r'), Loader=yaml.FullLoader)
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
@@ -68,7 +72,7 @@ def test(epoch):
             correct += predicted.eq(targets).sum().item()
 
             loss = loss.item()
-            s = str(float(loss)) + '_' + str(path[0]) + "\n"
+            s = str(float(loss)) + '@' + str(path[0]) + "\n"
 
             with open('./rotation_loss.txt', 'a') as f:
                 f.write(s)
@@ -84,26 +88,34 @@ if __name__ == "__main__":
     name_2 = []
 
     for j in losses:
-        loss_1.append(j[:-1].split('_')[0])
-        name_2.append(j[:-1].split('_')[1])
+        loss_str_split = j[:-1].split('@')
+        loss_1.append(loss_str_split[0])
+        name_2.append(loss_str_split[1])
 
-    s = np.array(loss_1)
-    sort_index = np.argsort(s)
+    batch_loss_path = np.array(loss_1)
+    sort_index = np.argsort(batch_loss_path)
     x = sort_index.tolist()
     x.reverse()
     sort_index = np.array(x) # convert to high loss first
 
     if not os.path.isdir('loss'):
         os.mkdir('loss')
-    for i in range(10):
+
+    dataset_size = config['dataset_size']
+    unlabeled_batch_size = config['unlabeled_batch_size']
+    number_of_classes = config['number_of_classes']
+    number_of_batches = ceil(dataset_size / unlabeled_batch_size)
+
+    for current_batch in range(number_of_batches):
         # sample minibatch from unlabeled pool 
-        sample5000 = sort_index[i*5000:(i+1)*5000]
-        # sample1000 = sample5000[[j*5 for j in range(1000)]]
-        b = np.zeros(10)
-        for jj in sample5000:
-            b[int(name_2[jj].split('/')[-2])] +=1
-        print(f'{i} Class Distribution: {b}')
-        s = './loss/batch_' + str(i) + '.txt'
-        for k in sample5000:
-            with open(s, 'a') as f:
-                f.write(name_2[k]+'\n')
+        batch_images = sort_index[current_batch * unlabeled_batch_size:min((current_batch + 1) * unlabeled_batch_size, dataset_size)]
+
+        class_dist = np.zeros(number_of_classes)
+        batch_loss_path = './loss/batch_' + str(current_batch) + '.txt'
+
+        for img_path in batch_images:
+            class_index = int(name_2[img_path].split('/')[-2])
+            class_dist[class_index] +=1
+            with open(batch_loss_path, 'a') as f:
+                f.write(name_2[img_path]+'\n')
+        print(f'{current_batch} Class Distribution: {class_dist}')
