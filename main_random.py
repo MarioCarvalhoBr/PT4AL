@@ -19,8 +19,8 @@ from models import *
 from utils import progress_bar
 from loader import Loader, Loader2
 
-import yaml
-config = yaml.load(open('config.yaml'), Loader=yaml.FullLoader)
+from config import Config
+config = Config()
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
@@ -132,11 +132,8 @@ def test(net, criterion, epoch, cycle):
 
 
 if __name__ == "__main__":
-    dataset_size = config['dataset_size']
-    unlabeled_batch_size = config['unlabeled_batch_size']
-    batch_percentage_on_increase = config['batch_percentage_on_increase']
-    number_of_batches = ceil(dataset_size / unlabeled_batch_size)
-    sample_size_increase = int(unlabeled_batch_size * batch_percentage_on_increase)
+    num_unlabeled_batches = config.num_unlabeled_batches
+    labeled_set_increase = config.labeled_set_increase
 
     labeled_images = []
         
@@ -154,7 +151,7 @@ if __name__ == "__main__":
     unlabeled_batch_images = np.array(img_paths)
 
 
-    CYCLES = number_of_batches
+    CYCLES = num_unlabeled_batches
     for cycle in range(CYCLES):
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.SGD(net.parameters(), lr=0.1,momentum=0.9, weight_decay=5e-4)
@@ -164,8 +161,8 @@ if __name__ == "__main__":
         print('Cycle ', cycle)
 
         # sample withouth replacement from unlabeled batch_images
-        unlabeled_images_sample = unlabeled_batch_images[:sample_size_increase]
-        unlabeled_batch_images = unlabeled_batch_images[sample_size_increase:]
+        unlabeled_images_sample = unlabeled_batch_images[:labeled_set_increase]
+        unlabeled_batch_images = unlabeled_batch_images[labeled_set_increase:]
                 
         # add the sampled images to the labeled set
         labeled_images.extend(unlabeled_images_sample)
@@ -174,7 +171,7 @@ if __name__ == "__main__":
         trainset = Loader2(is_train=True, transform=transform_train, path_list=labeled_images)
         trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True, num_workers=2)
     
-        for epoch in range(start_epoch, start_epoch+20):
+        for epoch in range(start_epoch, start_epoch+200):
             train(net, criterion, optimizer, epoch, trainloader)
             test(net, criterion, epoch, cycle)
             scheduler.step()

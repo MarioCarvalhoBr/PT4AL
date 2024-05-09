@@ -9,8 +9,8 @@ import numpy as np
 import random
 import cv2
 
-import yaml
-config = yaml.load(open('config.yaml', 'r'), Loader=yaml.FullLoader)
+from config import Config
+config = Config()
 
 class RotationLoader(Dataset):
     def __init__(self, is_train=True, transform=None, path='./DATA'):
@@ -80,15 +80,15 @@ class Loader2(Dataset):
     
 class Loader_Cold(Dataset):
     def __init__(self, is_train=True, transform=None, path='./DATA'):
-        unlabeled_batch_size = config['unlabeled_batch_size']
-        batch_percentage_on_increase = config['batch_percentage_on_increase']
+        unlabeled_batch_size = config.unlabeled_batch_size
+        unlabeled_batch_percentage_to_label = config.unlabeled_batch_percentage_to_label
 
         self.is_train = is_train
         self.transform = transform
         # TODO: hardcoded path
         with open('./loss/batch_5.txt', 'r') as f:
             self.list = f.readlines()
-        self.list = [self.list[i] for i in range(0, unlabeled_batch_size, int(1/batch_percentage_on_increase))]
+        self.list = [self.list[i] for i in range(0, unlabeled_batch_size, int(1/unlabeled_batch_percentage_to_label))]
         if self.is_train==True: # train
             self.img_path = self.list
         else:

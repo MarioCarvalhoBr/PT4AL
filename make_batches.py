@@ -18,8 +18,8 @@ from models import *
 from loader import Loader, RotationLoader
 from utils import progress_bar
 
-import yaml
-config = yaml.load(open('config.yaml', 'r'), Loader=yaml.FullLoader)
+from config import Config
+config = Config()
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
@@ -101,16 +101,16 @@ if __name__ == "__main__":
     if not os.path.isdir('loss'):
         os.mkdir('loss')
 
-    dataset_size = config['dataset_size']
-    unlabeled_batch_size = config['unlabeled_batch_size']
-    number_of_classes = config['number_of_classes']
-    number_of_batches = ceil(dataset_size / unlabeled_batch_size)
+    train_set_size = config.train_set_size
+    unlabeled_batch_size = config.unlabeled_batch_size
+    num_classes = config.num_classes
+    num_unlabeled_batches = config.num_unlabeled_batches
 
-    for current_batch in range(number_of_batches):
+    for current_batch in range(num_unlabeled_batches):
         # sample minibatch from unlabeled pool 
-        batch_images = sort_index[current_batch * unlabeled_batch_size:min((current_batch + 1) * unlabeled_batch_size, dataset_size)]
+        batch_images = sort_index[current_batch * unlabeled_batch_size:min((current_batch + 1) * unlabeled_batch_size, train_set_size)]
 
-        class_dist = np.zeros(number_of_classes)
+        class_dist = np.zeros(num_classes)
         batch_loss_path = './loss/batch_' + str(current_batch) + '.txt'
 
         for img_path in batch_images:
