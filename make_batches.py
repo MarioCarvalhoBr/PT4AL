@@ -12,7 +12,6 @@ import os
 import argparse
 import random
 import numpy as np
-from math import ceil
 
 from models import *
 from loader import Loader, RotationLoader
@@ -118,4 +117,6 @@ if __name__ == "__main__":
             class_dist[class_index] +=1
             with open(batch_loss_path, 'a') as f:
                 f.write(name_2[img_path]+'\n')
-        print(f'{current_batch} Class Distribution: {class_dist}')
+
+        with open('./loss/class_dist.txt', 'a') as f:
+            f.write(str(current_batch) + ' Class Distribution: ' + str(class_dist) + '\n')

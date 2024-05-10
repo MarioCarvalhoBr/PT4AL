@@ -18,9 +18,9 @@ class RotationLoader(Dataset):
         self.transform = transform
         # self.h_flip = transforms.RandomHorizontalFlip(p=1)
         if self.is_train == 0: # train
-            self.img_path = glob.glob('./DATA/train/*/*')
+            self.img_path = glob.glob(f'{path}/train/*/*')
         else:
-            self.img_path = glob.glob('./DATA/train/*/*')
+            self.img_path = glob.glob(f'{path}/train/*/*')
 
     def __len__(self):
         return len(self.img_path)
@@ -58,7 +58,7 @@ class Loader2(Dataset):
             self.img_path = path_list
         else:
             if path_list is None:
-                self.img_path = glob.glob('./DATA/train/*/*') # for loss extraction
+                self.img_path = glob.glob(f'{path}/train/*/*') # for loss extraction
             else:
                 self.img_path = path_list
     def __len__(self):
@@ -92,7 +92,7 @@ class Loader_Cold(Dataset):
         if self.is_train==True: # train
             self.img_path = self.list
         else:
-            self.img_path = glob.glob('./DATA/test/*/*')
+            self.img_path = glob.glob(f'{path}/test/*/*')
 
     def __len__(self):
         return len(self.img_path)
@@ -113,9 +113,9 @@ class Loader(Dataset):
         self.is_train = is_train
         self.transform = transform
         if self.is_train: # train
-            self.img_path = glob.glob('./DATA/train/*/*')
+            self.img_path = glob.glob(f'{path}/train/*/*')
         else:
-            self.img_path = glob.glob('./DATA/test/*/*')
+            self.img_path = glob.glob(f'{path}/test/*/*')
 
     def __len__(self):
         return len(self.img_path)
