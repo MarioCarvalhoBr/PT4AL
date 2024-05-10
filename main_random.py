@@ -141,6 +141,10 @@ def test(net, criterion, epoch, cycle):
 
 
 if __name__ == "__main__":
+    run_path = "./random_run"
+    if not os.path.exists(run_path):
+        os.makedirs(run_path)
+
     num_unlabeled_batches = config.num_unlabeled_batches
     labeled_set_increase = config.labeled_set_increase
     num_classes = config.num_classes
@@ -175,7 +179,7 @@ if __name__ == "__main__":
         unlabeled_batch_images = unlabeled_batch_images[labeled_set_increase:]
                 
         # add the sampled images to the labeled set
-        get_class_dist(unlabeled_images_sample, cycle, num_classes, "./random_run/class_dist.txt")
+        get_class_dist(unlabeled_images_sample, cycle, num_classes, f"./{run_path}/class_dist.txt")
         labeled_images.extend(unlabeled_images_sample)
         print(f'>> Labeled length: {len(labeled_images)}')
 
@@ -191,7 +195,7 @@ if __name__ == "__main__":
 
         plt.figure(figsize=(10,7))
         sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
-        plt.savefig(f'./random_run/confusion_matrix_{cycle}.png')
+        plt.savefig(f'./{run_path}/confusion_matrix_{cycle}.png')
 
-        with open(f'./random_run/metrics.txt', 'a') as f:
+        with open(f'./{run_path}/metrics.txt', 'a') as f:
             f.write(str(cycle) + ' ' + classification_rep + '\n')

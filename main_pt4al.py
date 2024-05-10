@@ -46,9 +46,6 @@ trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True
 testset = Loader_Cold(is_train=False, transform=transform_test)
 testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
 
-classes = ('plane', 'car', 'bird', 'cat', 'deer',
-           'dog', 'frog', 'horse', 'ship', 'truck')
-
 # Model
 print('==> Building model..')
 net = ResNet18()
@@ -130,7 +127,7 @@ def test(epoch):
         best_acc = acc
 
 
-for epoch in range(start_epoch, start_epoch+200):
+for epoch in range(start_epoch, start_epoch+20):
     train(epoch)
     test(epoch)
     scheduler.step()
