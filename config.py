@@ -2,7 +2,7 @@ import os
 from math import ceil
 
 class Config:
-    def __init__(self, data_dir="./DATA", img_size=32, unlabeled_batch_size=100, unlabeled_batch_percentage_to_label=0.5):
+    def __init__(self, data_dir="/home/aroeira/Desktop/CARVALHO/doutorado/datasets/mamonas_32x32_0.1_to_1_split", img_size=32, unlabeled_batch_size=5000, unlabeled_batch_percentage_to_label=0.5):
         self._data_dir = data_dir
         train_dir = os.path.join(data_dir, 'train')
         self._num_classes = len(os.listdir(train_dir))
@@ -50,7 +50,7 @@ class Config:
         
 
 if __name__ == '__main__':
-    config = Config(data_dir='/home/juan/Documents/tcc/code/PT4AL/DATA')
+    config = Config(data_dir='/home/aroeira/Desktop/CARVALHO/doutorado/datasets/mamonas_32x32_0.1_to_1_split')
     print(config.data_dir)
     print(config.num_classes)
     print(config.train_set_size)

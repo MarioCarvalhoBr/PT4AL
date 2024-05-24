@@ -225,7 +225,7 @@ if __name__ == '__main__':
 
     CYCLES = num_unlabeled_batches
     for cycle in range(CYCLES):
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.CrossEntropyLoss(weight=torch.tensor([1.5, 1.0]).to(device))
         optimizer = optim.SGD(net.parameters(), lr=0.1,momentum=0.9, weight_decay=5e-4)
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[160])
 
@@ -259,7 +259,7 @@ if __name__ == '__main__':
 
         conf_matrix = None
         classification_rep = None
-        for epoch in range(20):
+        for epoch in range(200):
             train(net, criterion, optimizer, epoch, trainloader)
             conf_matrix, classification_rep = test(net, criterion, epoch, cycle)
             scheduler.step()
