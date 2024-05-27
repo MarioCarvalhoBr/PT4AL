@@ -19,8 +19,13 @@ from models import *
 from utils import progress_bar
 from loader import Loader, Loader2
 
-import yaml
-config = yaml.load(open('config.yaml'), Loader=yaml.FullLoader)
+from config import Config
+config = Config()
+
+from class_dist import get_class_dist
+from sklearn.metrics import confusion_matrix, classification_report
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
@@ -68,7 +73,7 @@ if args.resume:
     best_acc = checkpoint['acc']
     start_epoch = checkpoint['epoch']
 
-criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss(weight=torch.tensor([1.5, 1.0]).to(device))
 optimizer = optim.SGD(net.parameters(), lr=0.1,momentum=0.9, weight_decay=5e-4)
 scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[160])
 
@@ -102,6 +107,8 @@ def test(net, criterion, epoch, cycle):
     test_loss = 0
     correct = 0
     total = 0
+    all_preds = []
+    all_targets = []
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
@@ -112,10 +119,11 @@ def test(net, criterion, epoch, cycle):
             _, predicted = outputs.max(1)
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
+            all_preds.extend(predicted.cpu().numpy())
+            all_targets.extend(targets.cpu().numpy())
 
             progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                          % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
-
     # Save checkpoint.
     acc = 100.*correct/total
     if acc > best_acc:
@@ -129,14 +137,17 @@ def test(net, criterion, epoch, cycle):
             os.mkdir('checkpoint')
         torch.save(state, f'./checkpoint/main_{cycle}.pth')
         best_acc = acc
+    return confusion_matrix(all_targets, all_preds), classification_report(all_targets, all_preds, zero_division=1)
 
 
 if __name__ == "__main__":
-    dataset_size = config['dataset_size']
-    unlabeled_batch_size = config['unlabeled_batch_size']
-    batch_percentage_on_increase = config['batch_percentage_on_increase']
-    number_of_batches = ceil(dataset_size / unlabeled_batch_size)
-    sample_size_increase = int(unlabeled_batch_size * batch_percentage_on_increase)
+    run_path = "./random_run"
+    if not os.path.exists(run_path):
+        os.makedirs(run_path)
+
+    num_unlabeled_batches = config.num_unlabeled_batches
+    labeled_set_increase = config.labeled_set_increase
+    num_classes = config.num_classes
 
     labeled_images = []
         
@@ -154,7 +165,7 @@ if __name__ == "__main__":
     unlabeled_batch_images = np.array(img_paths)
 
 
-    CYCLES = number_of_batches
+    CYCLES = num_unlabeled_batches
     for cycle in range(CYCLES):
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.SGD(net.parameters(), lr=0.1,momentum=0.9, weight_decay=5e-4)
@@ -164,20 +175,27 @@ if __name__ == "__main__":
         print('Cycle ', cycle)
 
         # sample withouth replacement from unlabeled batch_images
-        unlabeled_images_sample = unlabeled_batch_images[:sample_size_increase]
-        unlabeled_batch_images = unlabeled_batch_images[sample_size_increase:]
+        unlabeled_images_sample = unlabeled_batch_images[:labeled_set_increase]
+        unlabeled_batch_images = unlabeled_batch_images[labeled_set_increase:]
                 
         # add the sampled images to the labeled set
+        get_class_dist(unlabeled_images_sample, cycle, num_classes, f"./{run_path}/class_dist.txt")
         labeled_images.extend(unlabeled_images_sample)
         print(f'>> Labeled length: {len(labeled_images)}')
 
         trainset = Loader2(is_train=True, transform=transform_train, path_list=labeled_images)
         trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True, num_workers=2)
     
-        for epoch in range(start_epoch, start_epoch+20):
+        conf_matrix = None
+        classification_rep = None
+        for epoch in range(start_epoch, start_epoch+200):
             train(net, criterion, optimizer, epoch, trainloader)
-            test(net, criterion, epoch, cycle)
+            conf_matrix, classification_rep = test(net, criterion, epoch, cycle)
             scheduler.step()
 
-        with open(f'./main_random_best.txt', 'a') as f:
-                f.write(str(cycle) + ' ' + str(best_acc)+'\n')
+        plt.figure(figsize=(10,7))
+        sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
+        plt.savefig(f'./{run_path}/confusion_matrix_{cycle}.png')
+
+        with open(f'./{run_path}/metrics.txt', 'a') as f:
+            f.write(str(cycle) + ' ' + classification_rep + '\n')

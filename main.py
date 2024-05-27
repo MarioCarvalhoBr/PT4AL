@@ -12,14 +12,18 @@ import os
 import argparse
 import random
 import numpy as np
-from math import ceil
-
-import yaml
-config = yaml.load(open('config.yaml'), Loader=yaml.FullLoader)
 
 from models import *
 from loader import Loader, Loader2
 from utils import progress_bar
+
+from config import Config
+config = Config()
+
+from class_dist import get_class_dist
+from sklearn.metrics import confusion_matrix, classification_report
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
@@ -87,6 +91,8 @@ def test(net, criterion, epoch, cycle):
     test_loss = 0
     correct = 0
     total = 0
+    all_preds = []
+    all_targets = []
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
@@ -97,10 +103,11 @@ def test(net, criterion, epoch, cycle):
             _, predicted = outputs.max(1)
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
+            all_preds.extend(predicted.cpu().numpy())
+            all_targets.extend(targets.cpu().numpy())
 
             progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                          % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
-
     # Save checkpoint.
     acc = 100.*correct/total
     if acc > best_acc:
@@ -114,6 +121,7 @@ def test(net, criterion, epoch, cycle):
             os.mkdir('checkpoint')
         torch.save(state, f'./checkpoint/main_{cycle}.pth')
         best_acc = acc
+    return confusion_matrix(all_targets, all_preds), classification_report(all_targets, all_preds, zero_division=1)
 
 # class-balanced sampling (pseudo labeling)
 def get_plabels(net, samples, cycle):
@@ -153,7 +161,7 @@ def get_plabels(net, samples, cycle):
 
 # confidence sampling (pseudo labeling)
 ## return 1k samples w/ lowest top1 score
-def get_plabels2(net, samples, cycle, sample_size_increase):
+def get_plabels2(net, samples, cycle, labeled_set_increase):
     # dictionary with 10 keys as class labels
     # class_dict = {}
     # [class_dict.setdefault(x,[]) for x in range(10)]
@@ -177,7 +185,7 @@ def get_plabels2(net, samples, cycle, sample_size_increase):
     top1_scores = [score.cpu().numpy() for score in top1_scores]
     idx = np.argsort(top1_scores)
     samples = np.array(samples)
-    return samples[idx[:sample_size_increase]]
+    return samples[idx[:labeled_set_increase]]
 
 # entropy sampling
 def get_plabels3(net, samples, cycle):
@@ -207,17 +215,17 @@ def get_classdist(samples):
     return class_dist
 
 if __name__ == '__main__':
-    dataset_size = config['dataset_size']
-    unlabeled_batch_size = config['unlabeled_batch_size']
-    batch_percentage_on_increase = config['batch_percentage_on_increase']
-    number_of_batches = ceil(dataset_size / unlabeled_batch_size)
-    sample_size_increase = int(unlabeled_batch_size * batch_percentage_on_increase)
+    unlabeled_batch_size = config.unlabeled_batch_size
+    unlabeled_batch_percentage_to_label = config.unlabeled_batch_percentage_to_label
+    num_unlabeled_batches = config.num_unlabeled_batches
+    labeled_set_increase = config.labeled_set_increase
+    num_classes = config.num_classes
 
     labeled_images = []
-        
-    CYCLES = number_of_batches
+
+    CYCLES = num_unlabeled_batches
     for cycle in range(CYCLES):
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.CrossEntropyLoss(weight=torch.tensor([1.5, 1.0]).to(device))
         optimizer = optim.SGD(net.parameters(), lr=0.1,momentum=0.9, weight_decay=5e-4)
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[160])
 
@@ -236,21 +244,30 @@ if __name__ == '__main__':
             net.load_state_dict(checkpoint['net'])
 
             # sampling
-            unlabeled_images_sample = get_plabels2(net, unlabeled_batch_images, cycle, sample_size_increase)
+            unlabeled_images_sample = get_plabels2(net, unlabeled_batch_images, cycle, labeled_set_increase)
         else:
             # first iteration: sample portion of the batch
             unlabeled_batch_images = np.array(unlabeled_batch_images)
-            unlabeled_images_sample = unlabeled_batch_images[[j for j in range(0, unlabeled_batch_size, int(1/batch_percentage_on_increase))]]
+            unlabeled_images_sample = unlabeled_batch_images[[j for j in range(0, unlabeled_batch_size, int(1/unlabeled_batch_percentage_to_label))]]
         
         # add the sampled images to the labeled set
+        get_class_dist(unlabeled_images_sample, cycle, num_classes, "./pt4al_run/class_dist.txt")
         labeled_images.extend(unlabeled_images_sample)
         print(f'>> Labeled length: {len(labeled_images)}')
         trainset = Loader2(is_train=True, transform=transform_train, path_list=labeled_images)
         trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True, num_workers=2)
 
-        for epoch in range(20):
+        conf_matrix = None
+        classification_rep = None
+        for epoch in range(200):
             train(net, criterion, optimizer, epoch, trainloader)
-            test(net, criterion, epoch, cycle)
+            conf_matrix, classification_rep = test(net, criterion, epoch, cycle)
             scheduler.step()
-        with open(f'./main_best.txt', 'a') as f:
-            f.write(str(cycle) + ' ' + str(best_acc)+'\n')
+
+
+        plt.figure(figsize=(10,7))
+        sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
+        plt.savefig(f'./pt4al_run/confusion_matrix_{cycle}.png')
+
+        with open(f'./pt4al_run/metrics.txt', 'a') as f:
+            f.write(str(cycle) + ' ' + classification_rep + '\n')
