@@ -215,6 +215,10 @@ def get_classdist(samples):
     return class_dist
 
 if __name__ == '__main__':
+    run_path = './pt4al_run'
+    if not os.path.exists(run_path):
+        os.makedirs(run_path)
+
     unlabeled_batch_size = config.unlabeled_batch_size
     unlabeled_batch_percentage_to_label = config.unlabeled_batch_percentage_to_label
     num_unlabeled_batches = config.num_unlabeled_batches
@@ -251,7 +255,7 @@ if __name__ == '__main__':
             unlabeled_images_sample = unlabeled_batch_images[[j for j in range(0, unlabeled_batch_size, int(1/unlabeled_batch_percentage_to_label))]]
         
         # add the sampled images to the labeled set
-        get_class_dist(unlabeled_images_sample, cycle, num_classes, "./pt4al_run/class_dist.txt")
+        get_class_dist(unlabeled_images_sample, cycle, num_classes, f"./{run_path}/class_dist.txt")
         labeled_images.extend(unlabeled_images_sample)
         print(f'>> Labeled length: {len(labeled_images)}')
         trainset = Loader2(is_train=True, transform=transform_train, path_list=labeled_images)
@@ -267,7 +271,7 @@ if __name__ == '__main__':
 
         plt.figure(figsize=(10,7))
         sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
-        plt.savefig(f'./pt4al_run/confusion_matrix_{cycle}.png')
+        plt.savefig(f'./{run_path}/confusion_matrix_{cycle}.png')
 
-        with open(f'./pt4al_run/metrics.txt', 'a') as f:
+        with open(f'./{run_path}/metrics.txt', 'a') as f:
             f.write(str(cycle) + ' ' + classification_rep + '\n')

@@ -141,6 +141,7 @@ def test(net, criterion, epoch, cycle):
 
 
 if __name__ == "__main__":
+    random.seed(42)
     run_path = "./random_run"
     if not os.path.exists(run_path):
         os.makedirs(run_path)
