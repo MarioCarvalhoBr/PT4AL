@@ -79,6 +79,8 @@ def test(epoch):
                          % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
 if __name__ == "__main__":
+    with open('./rotation_loss.txt', 'w') as f:
+        f.write('')
     test(1)
     with open('./rotation_loss.txt', 'r') as f:
         losses = f.readlines()

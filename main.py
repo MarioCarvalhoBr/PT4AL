@@ -48,7 +48,7 @@ transform_test = transforms.Compose([
 ])
 
 testset = Loader(is_train=False, transform=transform_test)
-testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
+testloader = torch.utils.data.DataLoader(testset, batch_size=256, shuffle=False, num_workers=2)
 
 
 # Model
@@ -216,6 +216,9 @@ if __name__ == '__main__':
     run_path = './pt4al_run'
     if not os.path.exists(run_path):
         os.makedirs(run_path)
+    
+    if not os.path.exists(f"./{run_path}/_final"):
+        os.makedirs(f"./{run_path}/_final")
 
     unlabeled_batch_size = config.unlabeled_batch_size
     unlabeled_batch_percentage_to_label = config.unlabeled_batch_percentage_to_label
@@ -225,8 +228,12 @@ if __name__ == '__main__':
 
     labeled_images = []
 
+    plt.figure(figsize=(10,7))
     CYCLES = num_unlabeled_batches
     for cycle in range(CYCLES):
+        if not os.path.exists(f'{run_path}/cycle_{cycle}'):
+            os.makedirs(f'{run_path}/cycle_{cycle}')
+
         criterion = nn.CrossEntropyLoss(weight=torch.tensor([1.5, 1.0]).to(device))
         optimizer = optim.SGD(net.parameters(), lr=0.1,momentum=0.9, weight_decay=5e-4)
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[160])
@@ -257,7 +264,7 @@ if __name__ == '__main__':
         labeled_images.extend(unlabeled_images_sample)
         print(f'>> Labeled length: {len(labeled_images)}')
         trainset = Loader2(is_train=True, transform=transform_train, path_list=labeled_images)
-        trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True, num_workers=2)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=256, shuffle=True, num_workers=2)
 
         conf_matrix = None
         classification_rep = None
@@ -266,10 +273,17 @@ if __name__ == '__main__':
             conf_matrix, classification_rep = test(net, criterion, epoch, cycle)
             scheduler.step()
 
+            sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
+            plt.savefig(f'./{run_path}/cycle_{cycle}/confusion_matrix_{epoch}.png')
+            plt.clf()
 
-        plt.figure(figsize=(10,7))
+            with open(f'./{run_path}/cycle_{cycle}/metrics.txt', 'a') as f:
+                f.write(str(epoch) + ' ' + classification_rep + '\n')
+
+
         sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
-        plt.savefig(f'./{run_path}/confusion_matrix_{cycle}.png')
+        plt.savefig(f'./{run_path}/_final/confusion_matrix_{cycle}.png')
+        plt.clf()
 
-        with open(f'./{run_path}/metrics.txt', 'a') as f:
+        with open(f'./{run_path}/_final/metrics.txt', 'a') as f:
             f.write(str(cycle) + ' ' + classification_rep + '\n')
