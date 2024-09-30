@@ -41,16 +41,14 @@ transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
 transform_test = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
 testset = Loader(is_train=False, transform=transform_test)
-testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
+testloader = torch.utils.data.DataLoader(testset, batch_size=256, shuffle=False, num_workers=2)
 
 
 # Model
@@ -215,6 +213,13 @@ def get_classdist(samples):
     return class_dist
 
 if __name__ == '__main__':
+    run_path = './pt4al_run'
+    if not os.path.exists(run_path):
+        os.makedirs(run_path)
+    
+    if not os.path.exists(f"./{run_path}/_final"):
+        os.makedirs(f"./{run_path}/_final")
+
     unlabeled_batch_size = config.unlabeled_batch_size
     unlabeled_batch_percentage_to_label = config.unlabeled_batch_percentage_to_label
     num_unlabeled_batches = config.num_unlabeled_batches
@@ -223,8 +228,12 @@ if __name__ == '__main__':
 
     labeled_images = []
 
+    plt.figure(figsize=(10,7))
     CYCLES = num_unlabeled_batches
     for cycle in range(CYCLES):
+        if not os.path.exists(f'{run_path}/cycle_{cycle}'):
+            os.makedirs(f'{run_path}/cycle_{cycle}')
+
         criterion = nn.CrossEntropyLoss(weight=torch.tensor([1.5, 1.0]).to(device))
         optimizer = optim.SGD(net.parameters(), lr=0.1,momentum=0.9, weight_decay=5e-4)
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[160])
@@ -251,11 +260,11 @@ if __name__ == '__main__':
             unlabeled_images_sample = unlabeled_batch_images[[j for j in range(0, unlabeled_batch_size, int(1/unlabeled_batch_percentage_to_label))]]
         
         # add the sampled images to the labeled set
-        get_class_dist(unlabeled_images_sample, cycle, num_classes, "./pt4al_run/class_dist.txt")
+        get_class_dist(unlabeled_images_sample, cycle, num_classes, f"./{run_path}/class_dist.txt")
         labeled_images.extend(unlabeled_images_sample)
         print(f'>> Labeled length: {len(labeled_images)}')
         trainset = Loader2(is_train=True, transform=transform_train, path_list=labeled_images)
-        trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True, num_workers=2)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=256, shuffle=True, num_workers=2)
 
         conf_matrix = None
         classification_rep = None
@@ -264,10 +273,17 @@ if __name__ == '__main__':
             conf_matrix, classification_rep = test(net, criterion, epoch, cycle)
             scheduler.step()
 
+            sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
+            plt.savefig(f'./{run_path}/cycle_{cycle}/confusion_matrix_{epoch}.png')
+            plt.clf()
 
-        plt.figure(figsize=(10,7))
+            with open(f'./{run_path}/cycle_{cycle}/metrics.txt', 'a') as f:
+                f.write(str(epoch) + ' ' + classification_rep + '\n')
+
+
         sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
-        plt.savefig(f'./pt4al_run/confusion_matrix_{cycle}.png')
+        plt.savefig(f'./{run_path}/_final/confusion_matrix_{cycle}.png')
+        plt.clf()
 
-        with open(f'./pt4al_run/metrics.txt', 'a') as f:
+        with open(f'./{run_path}/_final/metrics.txt', 'a') as f:
             f.write(str(cycle) + ' ' + classification_rep + '\n')

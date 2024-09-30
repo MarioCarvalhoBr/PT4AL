@@ -13,7 +13,7 @@ import argparse
 import random
 
 from models import *
-from loader import Loader, RotationLoader
+from loader import Loader, PuzzleLoader
 from utils import progress_bar
 import numpy as np
 
@@ -31,19 +31,20 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
 transform_test = transforms.Compose([
     transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
-trainset = RotationLoader(is_train=True, transform=transform_test)
+trainset = PuzzleLoader(is_train=True, transform=transform_test)
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=256, shuffle=True, num_workers=2)
 
-testset = RotationLoader(is_train=False,  transform=transform_test)
+testset = PuzzleLoader(is_train=False,  transform=transform_test)
 testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
 
 # Model
@@ -134,7 +135,7 @@ def test(epoch):
 
     # Save checkpoint.
     acc = 100.*correct/total
-    with open('./best_rotation.txt','a') as f:
+    with open('./best_puzzle.txt','a') as f:
         f.write(str(acc)+':'+str(epoch)+'\n')
     if acc > best_acc:
         print('Saving..')
@@ -145,8 +146,8 @@ def test(epoch):
         }
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        # save rotation weights
-        torch.save(state, './checkpoint/rotation.pth')
+        # save puzzle weights
+        torch.save(state, './checkpoint/puzzle.pth')
         best_acc = acc
 
 
