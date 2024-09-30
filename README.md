@@ -32,10 +32,7 @@ numpy >= 1.16.0
 
 ## Running the Code
 
-To generate train and test dataset:
-```
-python make_data.py
-```
+Change the test parameters in ```config.py```
 
 To train the rotation predition task on the unlabeled set:
 ```
@@ -51,11 +48,6 @@ To evaluate on active learning task:
 ```
 python main.py
 ```
-
-To mask cold start experiments (random)
-```
-python main_random.py
-```
 ![image](https://user-images.githubusercontent.com/33244972/210195074-8cc85f97-8a20-4aac-b61b-034e91694788.png)
 
 
@@ -64,6 +56,15 @@ To mask cold start experiments (PT4AL)
 python main_pt4al.py
 ```
 ![image](https://user-images.githubusercontent.com/33244972/210192180-6158a4ea-052b-4313-baf9-0048aaa5746f.png)
+
+
+To get the metrics for a specific run, run ```utils/plot_curves.py```, changing the path of the metrics file
+
+To compare two runs (e.g. Random vs PT4AL), run ```utils/generate_acc_curves.py```
+
+To evaluate a classifier in the whole dataset, without active learning, run ```whole_dataset.py```
+
+
 
 ## Citation
 If you use our code in your research, or find our work helpful, please consider citing us with the bibtex below:
